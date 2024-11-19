@@ -1,0 +1,215 @@
+```{r}
+library(tidyverse)
+library(tidymodels)
+bike_data <- read_csv("https://www4.stat.ncsu.edu/~online/datasets/SeoulBikeData.csv",
+                      local = locale(encoding = "latin1"))
+bike_data
+```
+
+```{r}
+bike_data |> 
+  is.na() |> 
+  colSums()
+```
+```{r}
+attributes(bike_data)$spec
+```
+```{r}
+bike_data <- bike_data |>
+mutate(date = lubridate::dmy(Date)) |> select(-Date)
+```
+
+```{r}
+summary(bike_data)
+```
+```{r}
+bike_data$Seasons |> 
+  unique()
+```
+```{r}
+bike_data$Holiday |> 
+  unique()
+```
+```{r}
+bike_data$`Functioning Day` |> 
+  unique()
+```
+```{r}
+bike_data <- bike_data |> 
+  mutate(seasons = factor(Seasons),
+         holiday = factor(Holiday),
+         fn_day = factor(`Functioning Day`)) |> 
+  select(-Seasons, -Holiday, -`Functioning Day`)
+```
+
+```{r}
+bike_data <- bike_data |> rename('bike_count' = `Rented Bike Count`,
+         'hour' = "Hour",
+         "temp" = `Temperature(°C)`,
+         "wind_speed" = `Wind speed (m/s)`,
+         "humidity" = `Humidity(%)`,
+         "vis" = `Visibility (10m)`,
+         "dew_point_temp" = `Dew point temperature(°C)`,
+         "solar_radiation" = `Solar Radiation (MJ/m2)`,
+         "rainfall" = "Rainfall(mm)",
+         "snowfall" = `Snowfall (cm)`)
+```
+
+```{r}
+bike_data <- bike_data |> 
+  filter(fn_day == "Yes") |> 
+  select(-fn_day)
+```
+
+```{r}
+bike_data <- bike_data |>
+  group_by(date, seasons, holiday) |> 
+  summarize(bike_count = sum(bike_count),
+            temp = mean(temp),
+            humidity = mean(humidity), 
+            wind_speed = mean(wind_speed), 
+            vis = mean(vis),
+            dew_point_temp = mean(dew_point_temp), 
+            solar_radiation = mean(solar_radiation), 
+            rainfall = sum(rainfall),
+            snowfall = sum(snowfall)) |>
+  ungroup()
+bike_data
+```
+```{r}
+bike_data |> 
+  summarize(across(`bike_count`,
+                    .fns = c("mean" = mean, 
+                             "median" = median,
+                             "sd" = sd,
+                             "IQR" = IQR,
+                             "min" = min,
+                             "max" = max),
+                   .names = "{.col}_{.fn}"))
+```
+```{r}
+bike_data |>
+  group_by(holiday) |> 
+  summarize(across(`bike_count`,
+                    .fns = c("mean" = mean, 
+                             "median" = median,
+                             "sd" = sd,
+                             "IQR" = IQR,
+                             "min" = min,
+                             "max" = max),
+                   .names = "{.col}_{.fn}"))
+```
+```{r}
+bike_data |>
+  group_by(seasons) |> 
+  summarize(across(`bike_count`,
+                    .fns = c("mean" = mean, 
+                             "median" = median,
+                             "sd" = sd,
+                             "IQR" = IQR,
+                             "min" = min,
+                             "max" = max),
+                   .names = "{.col}_{.fn}"))
+```
+```{r}
+bike_data |>
+  group_by(seasons, holiday) |> 
+  summarize(across(`bike_count`,
+                    .fns = c("mean" = mean, 
+                             "median" = median,
+                             "sd" = sd,
+                             "IQR" = IQR,
+                             "min" = min,
+                             "max" = max),
+                   .names = "{.col}_{.fn}"))
+```
+```{r}
+bike_data |> 
+  select(where(is.numeric)) |> 
+  cor() |>
+  round(3)
+```
+```{r}
+ggplot(bike_data, aes(x = temp, y = bike_count)) + 
+  geom_jitter(aes(color = seasons)) + 
+  facet_grid(~holiday)
+```
+```{r}
+ggplot(bike_data, aes(x = solar_radiation, y = bike_count)) + 
+  geom_point(aes(color = seasons)) +
+  facet_grid(~holiday)
+```
+```{r}
+set.seed(11)
+bike_split <- initial_split(bike_data, prop = 0.75, strata = seasons) 
+bike_train <- training(bike_split)
+bike_test <- testing(bike_split)
+bike_10_fold <- vfold_cv(bike_train, 10)
+```
+
+```{r}
+MLR_rec1 <- recipe(bike_count ~ ., data = bike_train) |>
+step_date(date, features = "dow") |>
+step_mutate(day_type = factor(if_else(date_dow %in% c("Sat", "Sun"), "Weekend", "Weekday"))) |> step_rm(date, date_dow) |>
+step_dummy(seasons, holiday, day_type) |>
+step_normalize(all_numeric(), -bike_count)
+```
+
+```{r}
+MLR_rec2 <- MLR_rec1 |>
+step_interact(terms = ~starts_with("seasons")*starts_with("holiday") +
+                starts_with("seasons")*temp + 
+                temp*rainfall)
+```
+
+```{r}
+MLR_rec3 <- MLR_rec2 |> 
+  step_poly(temp,
+            wind_speed,
+            vis,
+            dew_point_temp,
+            solar_radiation,
+            rainfall,
+            snowfall,
+            degree = 2)
+```
+
+```{r}
+MLR_spec <- linear_reg() |> 
+  set_engine("lm")
+```
+
+```{r}
+MLR_CV_fit1 <- workflow() |> 
+  add_recipe(MLR_rec1) |> 
+  add_model(MLR_spec) |> 
+  fit_resamples(bike_10_fold)
+MLR_CV_fit2 <- workflow() |> 
+  add_recipe(MLR_rec2) |>
+  add_model(MLR_spec) |>
+  fit_resamples(bike_10_fold) 
+MLR_CV_fit3 <- workflow() |>
+add_recipe(MLR_rec3) |> 
+  add_model(MLR_spec) |> 
+  fit_resamples(bike_10_fold)
+```
+
+```{r}
+rbind(MLR_CV_fit1 |> collect_metrics(), 
+      MLR_CV_fit2 |> collect_metrics(), 
+      MLR_CV_fit3 |> collect_metrics())
+```
+```{r}
+final_fit <- workflow() |> 
+  add_recipe(MLR_rec1) |> 
+  add_model(MLR_spec) |> 
+  last_fit(bike_split)
+final_fit |> 
+  collect_metrics()
+```
+```{r}
+final_fit |> 
+  extract_fit_parsnip() |> 
+  tidy()
+```
+
