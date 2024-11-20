@@ -212,4 +212,178 @@ final_fit |>
   extract_fit_parsnip() |> 
   tidy()
 ```
+```{r}
+library(tidymodels)
+library(caret)
+library(glmnet)
+library(rpart)
+library(randomForest)
+library(ipred)
+library(ggplot2)
+library(recipes)
 
+```
+
+
+Lasso
+```{r}
+lasso_spec <- linear_reg(penalty = tune()) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+lasso_grid <- grid_regular(penalty(), levels = 20)
+
+lasso_wf <- workflow() |>
+  add_recipe(MLR_rec1) |>
+  add_model(lasso_spec)
+
+lasso_tune <- lasso_wf |>
+  tune_grid(resamples = bike_10_fold, grid = lasso_grid)
+```
+
+Regression Tree
+```{r}
+tree_spec <- decision_tree(cost_complexity = tune(), tree_depth = tune()) |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+regression_tree_grid <- grid_regular(cost_complexity(), tree_depth(), levels = 5)
+
+tree_wf <- workflow() |>
+  add_recipe(MLR_rec1) |>
+  add_model(tree_spec)
+
+tree_tune <- tree_wf |>
+  tune_grid(resamples = bike_10_fold, grid = tree_grid)
+
+```
+
+Bagged Tree
+```{r}
+bag_tree_spec <- rand_forest(trees = tune(), min_n = tune()) %>%
+  set_engine("randomForest") %>%
+  set_mode("regression")
+
+bag_tree_grid <- grid_regular(trees(range = c(50, 500)), min_n(range = c(2, 50)), levels = 5)
+
+bag_tree_workflow <- workflow() %>%
+  add_recipe(MLR_rec1) %>%
+  add_model(bag_tree_spec)
+
+bag_tree_tune <- bag_tree_workflow %>%
+  tune_grid(resamples = bike_10_fold, grid = bag_tree_grid)
+
+```
+
+
+Random Forest
+```{r}
+rf_spec <- rand_forest(mtry = tune(), trees = tune()) |>
+  set_engine("randomForest") |>
+  set_mode("regression")
+
+rf_grid <- grid_regular(
+  mtry(range =  c(2,10)),
+  trees(range = c(100, 200)), 
+  levels = 5
+)
+
+rf_wf <- workflow() |>
+  add_recipe(MLR_rec1) |>
+  add_model(rf_spec)
+
+rf_tune <- rf_wf |>
+  tune_grid(resamples = bike_10_fold, grid = rf_grid)
+
+```
+
+```{r}
+lasso_metrics <- collect_metrics(lasso_tune)
+tree_metrics <- collect_metrics(tree_tune)
+bag_tree_metrics <- collect_metrics(bag_tree_tune)
+rf_metrics <- collect_metrics(rf_tune)
+
+lasso_metrics
+tree_metrics
+bag_tree_metrics
+rf_metrics
+
+best_lasso <- lasso_metrics %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean) %>%
+  slice(1)
+
+best_tree <- tree_metrics %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean) %>%
+  slice(1)
+
+best_bag_tree <- bag_tree_metrics %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean) %>%
+  slice(1)
+
+best_rf <- rf_metrics %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean) %>%
+  slice(1)
+
+final_lasso <- lasso_workflow %>%
+  finalize_workflow(best_lasso)
+
+final_tree <- tree_wf %>%
+  finalize_workflow(best_tree)
+
+final_bag_tree <- bag_tree_workflow %>%
+  finalize_workflow(best_bag_tree)
+
+final_rf <- rf_wf %>%
+  finalize_workflow(best_rf)
+
+final_lasso_fit <- final_lasso %>%
+  fit(bike_train)
+
+final_tree_fit <- final_tree %>%
+  fit(bike_train)
+
+final_bag_tree_fit <- final_bag_tree %>%
+  fit(bike_train)
+
+final_rf_fit <- final_rf %>%
+  fit(bike_train)
+
+lasso_pred <- predict(final_lasso_fit, bike_test) %>%
+  bind_cols(bike_test) %>%
+  metrics(truth = bike_count, estimate = .pred)
+
+tree_pred <- predict(final_tree_fit, bike_test) %>%
+  bind_cols(bike_test) %>%
+  metrics(truth = bike_count, estimate = .pred)
+
+bag_tree_pred <- predict(final_bag_tree_fit, bike_test) %>%
+  bind_cols(bike_test) %>%
+  metrics(truth = bike_count, estimate = .pred)
+
+rf_pred <- predict(final_rf_fit, bike_test) %>%
+  bind_cols(bike_test) %>%
+  metrics(truth = bike_count, estimate = .pred)
+
+lasso_metrics <- lasso_pred %>%
+  filter(.metric %in% c("rmse", "mae"))
+
+tree_metrics <- tree_pred %>%
+  filter(.metric %in% c("rmse", "mae"))
+
+bag_tree_metrics <- bag_tree_pred %>%
+  filter(.metric %in% c("rmse", "mae"))
+
+rf_metrics <- rf_pred %>%
+  filter(.metric %in% c("rmse", "mae"))
+
+list(
+  lasso = lasso_metrics,
+  tree = tree_metrics,
+  bag_tree = bag_tree_metrics,
+  rf = rf_metrics
+)
+```
