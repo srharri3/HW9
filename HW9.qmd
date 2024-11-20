@@ -413,7 +413,7 @@ mlr_coefs <- final_fit %>%
 
 mlr_coefs
 ```
-
+Final tree model plot.
 ```{r}
 tree_model <- final_tree_fit %>%
   extract_fit_parsnip()
@@ -422,7 +422,7 @@ library(rpart.plot)
 rpart.plot(tree_model$fit, type = 4, extra = 101, main = "Final Regression Tree")
 
 ```
-
+Creating bagged tree model variable importance plot.
 ```{r}
 bag_tree_model <- final_bag_tree_fit %>%
   extract_fit_parsnip()
@@ -431,7 +431,7 @@ library(vip)
 vip(bag_tree_model$fit)
 
 ```
-
+Creating random forest variable importance plot.
 ```{r}
 rf_model <- final_rf_fit %>%
   extract_fit_parsnip()
