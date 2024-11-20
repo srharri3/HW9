@@ -387,3 +387,44 @@ list(
   rf = rf_metrics
 )
 ```
+```{r}
+lasso_coefs <- final_lasso_fit %>%
+  extract_fit_parsnip() %>%
+  tidy()
+
+lasso_coefs
+
+mlr_coefs <- final_fit %>%
+  extract_fit_parsnip() %>%
+  tidy()
+
+mlr_coefs
+
+```
+
+```{r}
+tree_model <- final_tree_fit %>%
+  extract_fit_parsnip()
+
+library(rpart.plot)
+rpart.plot(tree_model$fit, type = 4, extra = 101, main = "Final Regression Tree")
+
+```
+
+```{r}
+bag_tree_model <- final_bag_tree_fit %>%
+  extract_fit_parsnip()
+
+library(vip)
+vip(bag_tree_model$fit)
+
+```
+
+```{r}
+rf_model <- final_rf_fit %>%
+  extract_fit_parsnip()
+
+vip(rf_model$fit)
+
+```
+
