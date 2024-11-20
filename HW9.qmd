@@ -247,7 +247,7 @@ tree_spec <- decision_tree(cost_complexity = tune(), tree_depth = tune()) |>
   set_engine("rpart") |>
   set_mode("regression")
 
-regression_tree_grid <- grid_regular(cost_complexity(), tree_depth(), levels = 5)
+tree_grid <- grid_regular(cost_complexity(), tree_depth(), levels = 5)
 
 tree_wf <- workflow() |>
   add_recipe(MLR_rec1) |>
@@ -327,8 +327,9 @@ best_rf <- rf_metrics %>%
   filter(.metric == "rmse") %>%
   arrange(mean) %>%
   slice(1)
-
-final_lasso <- lasso_workflow %>%
+```
+```{r}
+final_lasso <- lasso_wf %>%
   finalize_workflow(best_lasso)
 
 final_tree <- tree_wf %>%
@@ -351,7 +352,9 @@ final_bag_tree_fit <- final_bag_tree %>%
 
 final_rf_fit <- final_rf %>%
   fit(bike_train)
+```
 
+```{r}
 lasso_pred <- predict(final_lasso_fit, bike_test) %>%
   bind_cols(bike_test) %>%
   metrics(truth = bike_count, estimate = .pred)
@@ -367,7 +370,9 @@ bag_tree_pred <- predict(final_bag_tree_fit, bike_test) %>%
 rf_pred <- predict(final_rf_fit, bike_test) %>%
   bind_cols(bike_test) %>%
   metrics(truth = bike_count, estimate = .pred)
+```
 
+```{r}
 lasso_metrics <- lasso_pred %>%
   filter(.metric %in% c("rmse", "mae"))
 
@@ -387,6 +392,8 @@ list(
   rf = rf_metrics
 )
 ```
+
+
 ```{r}
 lasso_coefs <- final_lasso_fit %>%
   extract_fit_parsnip() %>%
