@@ -1,3 +1,4 @@
+#Savannah Harrison - HW 9
 ```{r}
 library(tidyverse)
 library(tidymodels)
@@ -212,6 +213,8 @@ final_fit |>
   extract_fit_parsnip() |> 
   tidy()
 ```
+
+#Start of HW9
 ```{r}
 library(tidymodels)
 library(caret)
@@ -224,8 +227,7 @@ library(recipes)
 
 ```
 
-
-Lasso
+Tuned LASSO model using 10 fold cross-validation.
 ```{r}
 lasso_spec <- linear_reg(penalty = tune()) |>
   set_engine("glmnet") |>
@@ -241,7 +243,7 @@ lasso_tune <- lasso_wf |>
   tune_grid(resamples = bike_10_fold, grid = lasso_grid)
 ```
 
-Regression Tree
+Tuned Regression Tree model using 10 fold cross-validation.
 ```{r}
 tree_spec <- decision_tree(cost_complexity = tune(), tree_depth = tune()) |>
   set_engine("rpart") |>
@@ -258,7 +260,7 @@ tree_tune <- tree_wf |>
 
 ```
 
-Bagged Tree
+Tuned Bagged Tree model using 10 fold cross-validation.
 ```{r}
 bag_tree_spec <- rand_forest(trees = tune(), min_n = tune()) %>%
   set_engine("randomForest") %>%
@@ -276,7 +278,7 @@ bag_tree_tune <- bag_tree_workflow %>%
 ```
 
 
-Random Forest
+Tuned Random Forest model using 10 fold cross-validation.
 ```{r}
 rf_spec <- rand_forest(mtry = tune(), trees = tune()) |>
   set_engine("randomForest") |>
@@ -297,6 +299,7 @@ rf_tune <- rf_wf |>
 
 ```
 
+Finding the best model.
 ```{r}
 lasso_metrics <- collect_metrics(lasso_tune)
 tree_metrics <- collect_metrics(tree_tune)
@@ -328,6 +331,8 @@ best_rf <- rf_metrics %>%
   arrange(mean) %>%
   slice(1)
 ```
+
+Extracting final model fits for each type.
 ```{r}
 final_lasso <- lasso_wf %>%
   finalize_workflow(best_lasso)
@@ -354,6 +359,7 @@ final_rf_fit <- final_rf %>%
   fit(bike_train)
 ```
 
+Seeing how the models predicts.
 ```{r}
 lasso_pred <- predict(final_lasso_fit, bike_test) %>%
   bind_cols(bike_test) %>%
@@ -393,7 +399,7 @@ list(
 )
 ```
 
-
+Reporting final coefficient tables.
 ```{r}
 lasso_coefs <- final_lasso_fit %>%
   extract_fit_parsnip() %>%
